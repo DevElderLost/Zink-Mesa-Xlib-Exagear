@@ -139,9 +139,9 @@ jobs:
         run: |
           set -e
           apt-mark showhold || true
-          apt-cache policy dpkg-dev libdpkg-perl libinfo-dev 2>&1 | head -40
+          apt-cache policy dpkg-dev libdpkg-perl libtinfo-dev 2>&1 | head -40
           apt-get install -y --allow-downgrades --fix-broken --no-install-recommends \
-            dpkg-dev libdpkg-perl libinfo-dev libinfo5
+            dpkg-dev libdpkg-perl libtinfo-dev libtinfo5
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
