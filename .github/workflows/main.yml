@@ -153,6 +153,13 @@ jobs:
       # 4. Konfigurasi meson: X11, driver freedreno (Turnip) + zink,
       #    freedreno-kmds=kgsl -> WAJIB untuk jalan di atas kernel Android.
       #    (Turnip default 'msm' itu untuk DRM desktop Linux, bukan Android.)
+      #
+      #    gbm=disabled SENGAJA: begitu freedreno-kmds != 'msm' dan
+      #    vulkan-drivers cuma 'freedreno', Mesa otomatis mematikan
+      #    system_has_kms_drm (biar Turnip gak wajib link ke libdrm/KMS
+      #    yang gak ada di Android) -> GBM (yang butuh KMS/DRM) jadi
+      #    mustahil di-enable. GBM juga tidak kita perlukan karena target
+      #    platform kita cuma x11, bukan wayland/android EGL buffer alloc.
       # ---------------------------------------------------------------
       - name: Meson setup
         working-directory: mesa-src
@@ -165,7 +172,7 @@ jobs:
             -Dplatforms=x11 \
             -Dglx=dri \
             -Degl=enabled \
-            -Dgbm=enabled \
+            -Dgbm=disabled \
             -Dgallium-drivers=zink \
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=${FREEDRENO_KMD} \
@@ -202,7 +209,6 @@ jobs:
           find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/" \;
           find "$LIBDIR" -iname "libEGL*.so*" -exec cp -v {} "$OUT/lib/" \;
           find "$LIBDIR" -iname "libGLX*.so*" -exec cp -v {} "$OUT/lib/" \;
-          find "$LIBDIR" -iname "libgbm*.so*" -exec cp -v {} "$OUT/lib/" \;
           find "$LIBDIR" -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
 
           echo "Isi paket:"
