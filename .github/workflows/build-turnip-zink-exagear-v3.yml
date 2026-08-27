@@ -110,9 +110,21 @@ jobs:
           # apt akan menolak update tanpa ini.
           echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
 
+          # snapshot.ubuntu.com redirect http->https, tapi image i386/ubuntu:18.04
+          # belum punya ca-certificates (ayam-telur: install ca-certificates
+          # butuh apt-get update jalan dulu). Matikan verifikasi SSL SEMENTARA
+          # cuma buat bootstrap awal ini.
+          echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99no-check-cert
+          echo 'Acquire::https::Verify-Host "false";' >> /etc/apt/apt.conf.d/99no-check-cert
+
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates software-properties-common gnupg curl git
+
+          # Setelah ca-certificates asli ter-install, verifikasi SSL diaktifkan
+          # kembali biar step-step selanjutnya (PPA, pip, curl codeload) aman.
+          rm -f /etc/apt/apt.conf.d/99no-check-cert
+          apt-get update
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 + Python 3.9 di atas base bionic supaya
