@@ -122,22 +122,49 @@ jobs:
             ca-certificates software-properties-common gnupg curl
 
       # ---------------------------------------------------------------
-      # 2. Bootstrap GCC 10 + Python 3.9 di atas base bionic supaya
-      #    kompatibel dengan requirement Mesa upstream & Meson modern.
+      # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
+      #    (compile dari source resmi python.org, KARENA deadsnakes PPA
+      #    tidak lagi menyediakan build i386 utk Python 3.9 -> harus
+      #    portable, tidak bergantung PPA pihak ketiga).
       # ---------------------------------------------------------------
-      - name: Bootstrap newer GCC & Python via PPA
+      - name: Bootstrap newer GCC via PPA
         run: |
           set -e
           add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          add-apt-repository -y ppa:deadsnakes/ppa
           apt-get update
-          apt-get install -y --no-install-recommends \
-            gcc-10 g++-10 python3.9 python3.9-distutils python3.9-dev
+          apt-get install -y --no-install-recommends gcc-10 g++-10
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-          curl -sS https://bootstrap.pypa.io/pip/3.9/get-pip.py -o get-pip.py
-          python3.9 get-pip.py
-          python3.9 -m pip install --upgrade "meson==1.3.2"
+
+      - name: Compile Python 3.9 dari source (portable, tidak butuh PPA)
+        run: |
+          set -e
+          apt-get install -y --no-install-recommends \
+            libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+            libncurses5-dev libgdbm-dev liblzma-dev tk-dev libffi-dev uuid-dev
+
+          PY_VER="3.9.18"
+          curl -fL --retry 4 --retry-delay 5 \
+            -o Python-${PY_VER}.tgz \
+            "https://www.python.org/ftp/python/${PY_VER}/Python-${PY_VER}.tgz"
+          tar -xzf Python-${PY_VER}.tgz
+          cd Python-${PY_VER}
+
+          ./configure --prefix=/usr/local
+          make -j"$(nproc)"
+          make altinstall
+
+          # "altinstall" -> binary jadi /usr/local/bin/python3.9, TIDAK
+          # menimpa python3 sistem (bionic butuh python3.6 aslinya utuh
+          # utk apt/dpkg -> jangan sampai ketimpa).
+          /usr/local/bin/python3.9 --version
+
+          curl -sS https://bootstrap.pypa.io/pip/3.9/get-pip.py -o /tmp/get-pip.py
+          /usr/local/bin/python3.9 /tmp/get-pip.py
+          /usr/local/bin/python3.9 -m pip install --upgrade "meson==1.3.2"
+          # /usr/local/bin sudah ada di $PATH default container ini, jadi
+          # perintah "python3.9" polos di step-step berikutnya otomatis
+          # nemu binary hasil altinstall ini tanpa perlu symlink tambahan.
 
       # ---------------------------------------------------------------
       # 3. Install dependency build i386 asli (Xlib/EGL/GLX/Vulkan/LLVM)
