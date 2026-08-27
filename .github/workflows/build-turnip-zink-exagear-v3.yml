@@ -97,7 +97,7 @@ jobs:
           # old-releases.ubuntu.com/ubuntu sudah tidak menyajikan APT repo
           # (cuma installer ISO). Snapshot Service = arsip permanen APT
           # per-tanggal dari Canonical, sudah dikonfirmasi valid utk bionic i386.
-          SNAPSHOT_TS="20200201T000000Z"
+          SNAPSHOT_TS="20230401T000000Z"
           cat > /etc/apt/sources.list <<EOF
           deb http://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_TS} bionic main restricted universe multiverse
           EOF
