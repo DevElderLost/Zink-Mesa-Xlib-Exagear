@@ -100,6 +100,8 @@ jobs:
           SNAPSHOT_TS="20230401T000000Z"
           cat > /etc/apt/sources.list <<EOF
           deb http://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_TS} bionic main restricted universe multiverse
+          deb http://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_TS} bionic-updates main restricted universe multiverse
+          deb http://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_TS} bionic-security main restricted universe multiverse
           EOF
           rm -f /etc/apt/sources.list.d/*.list 2>/dev/null || true
 
