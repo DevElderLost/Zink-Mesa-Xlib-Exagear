@@ -135,28 +135,39 @@ jobs:
       #     lalu pastikan dpkg-dev, libdpkg-perl, libinfo-dev (basis buat
       #     build-essential & llvm-10-dev) benar-benar terpasang bersih.
       # ---------------------------------------------------------------
-      - name: Perbaiki paket inti (libtinfo header, tanpa downgrade sistem)
+      - name: Perbaiki paket inti (extract manual, hindari perl/dpkg-dev)
         run: |
           set -e
-          # libtinfo5 yang ter-bake di base image lebih baru dari yang ada
-          # di archive snapshot -> memasang libtinfo-dev via apt normal akan
-          # memaksa DOWNGRADE libtinfo5, yang mencabut puluhan paket esensial
-          # (python3, mount, sysvinit-utils, dst). TIDAK BOLEH.
-          #
-          # Solusi aman: ambil file .deb libtinfo-dev via "apt-get download"
-          # (TIDAK melalui dpkg install, TIDAK memicu resolusi dependency
-          # apapun), lalu salin manual cuma file header (.h) + symlink
-          # linker (libtinfo.so) yang dibutuhkan compiler. libtinfo5 asli
-          # (runtime .so.5) di sistem tetap utuh tidak diutak-atik.
-          mkdir -p /tmp/tinfo-extract
-          cd /tmp/tinfo-extract
-          apt-get download libtinfo-dev
-          dpkg -x libtinfo-dev_*.deb .
-          find . -name "*.h" -exec cp -v {} /usr/include/ \;
-          find . -name "libtinfo.so*" -exec cp -av {} /usr/lib/i386-linux-gnu/ \;
+          # Trik yang sama dipakai berulang di sini: "apt-get download" HANYA
+          # mengunduh file .deb TANPA melalui dpkg install (TIDAK memicu
+          # resolusi dependency apapun -> tidak ada downgrade/removal
+          # destruktif). Lalu kita ekstrak manual isi filenya (header .h,
+          # binary, symlink .so) langsung ke /usr, tanpa dpkg pernah tahu
+          # paket ini "terinstall". Dipakai utk semua paket yang di sistem
+          # ini selalu nyeret dependency broken (perl, dpkg-dev, libtinfo5
+          # yang beda versi dari bawaan image).
+          extract_deb() {
+            local pkg="$1"
+            local dir="/tmp/extract-${pkg}"
+            mkdir -p "$dir" && cd "$dir"
+            apt-get download "$pkg"
+            dpkg -x "${pkg}"_*.deb .
+            # Salin PERSIS struktur folder aslinya ke /usr (bukan cuma
+            # pattern .h/.so tertentu) -> aman utk paket kompleks kayak
+            # llvm-10-dev yang punya subfolder sendiri (/usr/lib/llvm-10/...,
+            # /usr/include/llvm-10/...), bukan cuma file lepas di /usr/include.
+            [ -d ./usr ] && cp -a ./usr/. /usr/
+            [ -d ./etc ] && cp -a ./etc/. /etc/
+          }
+          mkdir -p /usr/lib/i386-linux-gnu/pkgconfig
+          extract_deb libtinfo-dev
+          extract_deb pkg-config
+          extract_deb llvm-10-dev
           ldconfig
           echo "=== Verifikasi ==="
-          ls -la /usr/lib/i386-linux-gnu/libtinfo* /usr/include/term.h 2>&1 || true
+          which pkg-config && pkg-config --version
+          which llvm-config-10 && llvm-config-10 --version
+          ls -la /usr/include/term.h /usr/lib/i386-linux-gnu/libtinfo.so 2>&1 || true
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
@@ -210,7 +221,7 @@ jobs:
         run: |
           set -e
           apt-get install -y --allow-downgrades --no-install-recommends \
-            libc6-dev pkg-config ninja-build bison flex \
+            libc6-dev ninja-build bison flex \
             python3-mako python3-yaml \
             libdrm-dev libx11-dev libxext-dev libxfixes-dev \
             libxshmfence-dev libxxf86vm-dev libxdamage-dev \
@@ -218,8 +229,7 @@ jobs:
             libxcb-dri3-dev libxcb-present-dev libxcb-sync-dev \
             libxcb-xfixes0-dev libxcb-randr0-dev \
             libxrandr-dev libwayland-dev wayland-protocols \
-            libelf-dev zlib1g-dev libzstd-dev libexpat1-dev \
-            llvm-10-dev
+            libelf-dev zlib1g-dev libzstd-dev libexpat1-dev
 
       # ---------------------------------------------------------------
       # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
