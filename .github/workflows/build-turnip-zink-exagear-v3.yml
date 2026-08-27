@@ -182,8 +182,7 @@ jobs:
             libxcb-xfixes0-dev libxcb-randr0-dev \
             libxrandr-dev libwayland-dev wayland-protocols \
             libelf-dev zlib1g-dev libzstd-dev libexpat1-dev \
-            llvm-10-dev \
-            glslang-tools spirv-tools libvulkan-dev
+            llvm-10-dev
 
       # ---------------------------------------------------------------
       # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
