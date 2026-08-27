@@ -135,13 +135,17 @@ jobs:
       #     lalu pastikan dpkg-dev, libdpkg-perl, libinfo-dev (basis buat
       #     build-essential & llvm-10-dev) benar-benar terpasang bersih.
       # ---------------------------------------------------------------
-      - name: Perbaiki paket inti (dpkg-dev, libinfo-dev, dkk)
+      - name: Perbaiki paket inti (libtinfo, dkk)
         run: |
           set -e
           apt-mark showhold || true
-          apt-cache policy dpkg-dev libdpkg-perl libtinfo-dev 2>&1 | head -40
+          apt-cache policy libtinfo-dev 2>&1 | head -20
+          # dpkg-dev/libdpkg-perl SENGAJA tidak diinstall -> menyeret
+          # dependency ke "perl" yang konsisten bentrok versi di snapshot
+          # ini, dan kita TIDAK BUTUH dpkg-dev sama sekali utk build Mesa
+          # (itu cuma dipakai utk bikin paket .deb, bukan compile).
           apt-get install -y --allow-downgrades --fix-broken --no-install-recommends \
-            dpkg-dev libdpkg-perl libtinfo-dev libtinfo5
+            libtinfo-dev libtinfo5
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
@@ -195,7 +199,7 @@ jobs:
         run: |
           set -e
           apt-get install -y --allow-downgrades --no-install-recommends \
-            build-essential pkg-config ninja-build bison flex \
+            libc6-dev pkg-config ninja-build bison flex \
             python3-mako python3-yaml \
             libdrm-dev libx11-dev libxext-dev libxfixes-dev \
             libxshmfence-dev libxxf86vm-dev libxdamage-dev \
