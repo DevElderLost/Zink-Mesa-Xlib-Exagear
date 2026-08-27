@@ -119,7 +119,7 @@ jobs:
           apt-get update
           apt-mark unhold gnupg gpgv dpkg apt 2>/dev/null || true
           apt-get install -y --allow-downgrades --no-install-recommends \
-            ca-certificates software-properties-common gnupg curl git
+            ca-certificates software-properties-common gnupg curl
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 + Python 3.9 di atas base bionic supaya
