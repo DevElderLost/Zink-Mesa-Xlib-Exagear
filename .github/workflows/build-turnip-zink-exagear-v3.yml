@@ -233,10 +233,6 @@ jobs:
             libelf-dev zlib1g-dev libzstd-dev libexpat1-dev
 
       # ---------------------------------------------------------------
-      # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
-      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
-      # ---------------------------------------------------------------
-      # ---------------------------------------------------------------
       # 3b. Compile glslangValidator dari source. Mesa (versi berapapun
       #     yang punya vulkan-drivers aktif) WAJIB butuh binary ini utk
       #     compile shader internal (vk_meta dkk) saat build -> bukan
@@ -274,6 +270,11 @@ jobs:
           glslangValidator --version || true
 
 
+      # ---------------------------------------------------------------
+      # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
+      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
+      # ---------------------------------------------------------------
+      - name: Download Mesa upstream via codeload
         run: |
           set -e
           echo "Mengunduh ${MIRROR_REPO}@${MESA_VERSION} dari codeload..."
