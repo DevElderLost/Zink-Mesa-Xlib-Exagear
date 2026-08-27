@@ -121,6 +121,28 @@ jobs:
           apt-get install -y --allow-downgrades --no-install-recommends \
             ca-certificates software-properties-common gnupg curl
 
+          # PENTING: base image i386/ubuntu:18.04 sudah membawa beberapa
+          # paket versi lebih baru dari snapshot 2023-04-01 ini (baked-in
+          # saat image dibuild Docker Hub). Ini bikin resolver apt macet
+          # berulang kali di step-step berikutnya ("not going to be
+          # installed" utk paket yang sebenarnya tidak related langsung).
+          # Solusi tuntas: paksa SELURUH sistem sinkron ke snapshot ini
+          # sekaligus di sini, sebelum install apapun yang lain.
+          apt-get dist-upgrade -y --allow-downgrades
+
+      # ---------------------------------------------------------------
+      # 1b. Unhold semua paket yg mungkin ke-hold ulang usai dist-upgrade,
+      #     lalu pastikan dpkg-dev, libdpkg-perl, libinfo-dev (basis buat
+      #     build-essential & llvm-10-dev) benar-benar terpasang bersih.
+      # ---------------------------------------------------------------
+      - name: Perbaiki paket inti (dpkg-dev, libinfo-dev, dkk)
+        run: |
+          set -e
+          apt-mark showhold || true
+          apt-cache policy dpkg-dev libdpkg-perl libinfo-dev 2>&1 | head -40
+          apt-get install -y --allow-downgrades --fix-broken --no-install-recommends \
+            dpkg-dev libdpkg-perl libinfo-dev libinfo5
+
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
       #    (compile dari source resmi python.org, KARENA deadsnakes PPA
