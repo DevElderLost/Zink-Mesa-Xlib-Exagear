@@ -135,23 +135,28 @@ jobs:
       #     lalu pastikan dpkg-dev, libdpkg-perl, libinfo-dev (basis buat
       #     build-essential & llvm-10-dev) benar-benar terpasang bersih.
       # ---------------------------------------------------------------
-      - name: Perbaiki paket inti (libtinfo, dkk)
+      - name: Perbaiki paket inti (libtinfo header, tanpa downgrade sistem)
         run: |
           set -e
-          apt-mark showhold || true
-          apt-cache policy libtinfo-dev 2>&1 | head -20
-          # dpkg-dev/libdpkg-perl SENGAJA tidak diinstall -> menyeret
-          # dependency ke "perl" yang konsisten bentrok versi di snapshot
-          # ini, dan kita TIDAK BUTUH dpkg-dev sama sekali utk build Mesa
-          # (itu cuma dipakai utk bikin paket .deb, bukan compile).
-          # libtinfo5 yang sudah ter-bake di base image (.18.04.1) lebih
-          # baru dari versi apapun yang ada di archive snapshot kita
-          # (cuma sampai .18.04 tanpa patch tambahan). Pin eksplisit versi
-          # yang tersedia di archive supaya libtinfo5+libtinfo-dev konsisten.
-          TINFO_VER="$(apt-cache policy libtinfo-dev | awk '/Candidate:/{print $2; exit}')"
-          echo "Pakai versi libtinfo: ${TINFO_VER}"
-          apt-get install -y --allow-downgrades --fix-broken --no-install-recommends \
-            "libtinfo5=${TINFO_VER}" "libtinfo-dev=${TINFO_VER}"
+          # libtinfo5 yang ter-bake di base image lebih baru dari yang ada
+          # di archive snapshot -> memasang libtinfo-dev via apt normal akan
+          # memaksa DOWNGRADE libtinfo5, yang mencabut puluhan paket esensial
+          # (python3, mount, sysvinit-utils, dst). TIDAK BOLEH.
+          #
+          # Solusi aman: ambil file .deb libtinfo-dev via "apt-get download"
+          # (TIDAK melalui dpkg install, TIDAK memicu resolusi dependency
+          # apapun), lalu salin manual cuma file header (.h) + symlink
+          # linker (libtinfo.so) yang dibutuhkan compiler. libtinfo5 asli
+          # (runtime .so.5) di sistem tetap utuh tidak diutak-atik.
+          mkdir -p /tmp/tinfo-extract
+          cd /tmp/tinfo-extract
+          apt-get download libtinfo-dev
+          dpkg -x libtinfo-dev_*.deb .
+          find . -name "*.h" -exec cp -v {} /usr/include/ \;
+          find . -name "libtinfo.so*" -exec cp -av {} /usr/lib/i386-linux-gnu/ \;
+          ldconfig
+          echo "=== Verifikasi ==="
+          ls -la /usr/lib/i386-linux-gnu/libtinfo* /usr/include/term.h 2>&1 || true
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
