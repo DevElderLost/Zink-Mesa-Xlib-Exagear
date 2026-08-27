@@ -319,6 +319,7 @@ jobs:
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=${FREEDRENO_KMD} \
             -Dvulkan-beta=true \
+            -Dvulkan-layers= \
             -Dllvm=enabled \
             -Dshared-glapi=enabled \
             -Dgles2=enabled \
