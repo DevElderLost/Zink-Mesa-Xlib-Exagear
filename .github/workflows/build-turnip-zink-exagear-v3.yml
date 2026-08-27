@@ -245,7 +245,29 @@ jobs:
       - name: Compile glslangValidator dari source
         run: |
           set -e
-          apt-get install -y --allow-downgrades --no-install-recommends cmake
+          # cmake bawaan bionic (3.10.2) TERLALU TUA utk glslang modern
+          # (butuh >=3.17.2), dan Kitware sudah lama berhenti rilis
+          # prebuilt binary utk i386. Solusi: compile cmake sendiri dari
+          # source via script bootstrap bawaannya (cukup modal g++, tidak
+          # butuh cmake versi lama sama sekali).
+          # bekas cmake apt (3.10.2, terlalu tua) sudah tidak dipakai, kita
+          # ganti /usr/local/bin/cmake versi baru di atas (lebih diprioritaskan
+          # di $PATH daripada /usr/bin/cmake bawaan sistem).
+
+          CMAKE_VER="3.22.6"
+          curl -fL --retry 4 --retry-delay 5 \
+            -o cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/cmake-${CMAKE_VER}.tar.gz"
+          mkdir -p cmake-src
+          tar -xzf cmake.tar.gz -C cmake-src --strip-components=1
+          cd cmake-src
+          ./bootstrap --parallel="$(nproc)" -- -DCMAKE_USE_OPENSSL=OFF
+          make -j"$(nproc)"
+          make install
+          cd ..
+          hash -r
+          echo "=== Versi cmake terpasang ==="
+          /usr/local/bin/cmake --version
 
           GLSLANG_TAG="13.1.1"
           curl -fL --retry 4 --retry-delay 5 \
