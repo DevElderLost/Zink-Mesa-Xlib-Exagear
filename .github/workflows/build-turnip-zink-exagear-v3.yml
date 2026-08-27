@@ -137,7 +137,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: Perbaiki paket inti (extract manual, hindari perl/dpkg-dev)
         run: |
-          set -e
+          set -ex
           # Trik yang sama dipakai berulang di sini: "apt-get download" HANYA
           # mengunduh file .deb TANPA melalui dpkg install (TIDAK memicu
           # resolusi dependency apapun -> tidak ada downgrade/removal
