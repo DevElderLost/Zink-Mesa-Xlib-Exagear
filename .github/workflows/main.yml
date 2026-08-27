@@ -1,0 +1,225 @@
+name: Build Turnip+Zink for ExaGear (Mesa upstream terbaru)
+
+# Build libvulkan_freedreno.so (Turnip) + zink_dri.so (Zink OpenGL-over-Vulkan)
+# dari Mesa upstream resmi (bukan fork basi alexvorxx/Zink-Mesa-Xlib yang mentok
+# di 24.3.0-devel), ditarget X11/Xlib glibc aarch64 untuk rootfs Debian/XFCE
+# di dalam ExaGear (EDPatch-Fork).
+#
+# Sumber: mirror GitHub resmi dari gitlab.freedesktop.org/mesa/mesa
+# (chaotic-cx/mesa-mirror, sync tiap 5 menit, tag ikut skema resmi mesa-X.Y.Z).
+#
+# Trigger manual lewat tab "Actions" -> "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_version:
+        description: "Tag Mesa upstream (lihat: github.com/chaotic-cx/mesa-mirror/tags)"
+        required: true
+        default: "mesa-26.2.1"
+      freedreno_kmd:
+        description: "Kernel-mode driver target (Android pakai kgsl, BUKAN msm/DRM desktop)"
+        required: true
+        default: "kgsl"
+        type: choice
+        options:
+          - "kgsl"
+          - "msm,kgsl"
+      vulkan_target:
+        description: "Target apiVersion Turnip"
+        required: true
+        default: "stock"
+        type: choice
+        options:
+          - "stock"
+          - "force-1.4-all-chips"
+      buildtype:
+        description: "Meson buildtype"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - "release"
+          - "debugoptimized"
+          - "debug"
+      build_revision:
+        description: "Nomor revisi build kamu sendiri (R1, R2, dst - cuma untuk penamaan artifact)"
+        required: true
+        default: "R1"
+
+env:
+  MESA_VERSION: ${{ github.event.inputs.mesa_version }}
+  FREEDRENO_KMD: ${{ github.event.inputs.freedreno_kmd }}
+  VK_TARGET: ${{ github.event.inputs.vulkan_target }}
+  BUILDTYPE: ${{ github.event.inputs.buildtype }}
+  BUILD_REV: ${{ github.event.inputs.build_revision }}
+  MIRROR_REPO: "chaotic-cx/mesa-mirror"
+
+jobs:
+  build:
+    # runner ARM64 native bawaan GitHub -> tidak perlu NDK / cross-file,
+    # karena target kita glibc aarch64-linux-gnu (bukan Android bionic).
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      # ---------------------------------------------------------------
+      # 1. Ambil source Mesa upstream lewat codeload tarball dari mirror
+      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
+      # ---------------------------------------------------------------
+      - name: Download Mesa upstream via codeload
+        run: |
+          set -e
+          echo "Mengunduh ${MIRROR_REPO}@${MESA_VERSION} dari codeload..."
+          curl -fL --retry 4 --retry-delay 5 \
+            -o mesa-src.tar.gz \
+            "https://codeload.github.com/${MIRROR_REPO}/tar.gz/refs/tags/${MESA_VERSION}"
+
+          mkdir -p mesa-src
+          tar -xzf mesa-src.tar.gz -C mesa-src --strip-components=1
+          echo "Isi VERSION:"
+          cat mesa-src/VERSION || true
+
+      # ---------------------------------------------------------------
+      # 2. Install toolchain & dependency build (Xlib/EGL/GLX/Vulkan)
+      # ---------------------------------------------------------------
+      - name: Install build dependencies
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config ninja-build meson bison flex \
+            python3 python3-pip python3-mako python3-yaml \
+            libdrm-dev libx11-dev libxext-dev libxfixes-dev \
+            libxshmfence-dev libxxf86vm-dev libxdamage-dev \
+            libx11-xcb-dev libxcb-glx0-dev libxcb-shm0-dev libxcb-dri2-0-dev \
+            libxcb-dri3-dev libxcb-present-dev libxcb-sync-dev \
+            libxrandr-dev libwayland-dev wayland-protocols \
+            libelf-dev zlib1g-dev libzstd-dev \
+            glslang-tools spirv-tools libvulkan-dev
+
+          pip install --break-system-packages --upgrade meson
+
+      # ---------------------------------------------------------------
+      # 3. (Opsional) Patch apiVersion Turnip supaya semua chip generation
+      #    (termasuk a6xx / Adreno 610) di-report sebagai Vulkan 1.4.
+      #    DEFAULT: stock -> tidak diubah. Stock di Mesa 26.x sudah:
+      #      - a7xx+ (chip>=7)  -> 1.4
+      #      - a6xx  (chip<7)   -> 1.3   (ini yang dipakai Adreno 610)
+      #      - tanpa multiview  -> 1.0
+      # ---------------------------------------------------------------
+      - name: Patch Turnip apiVersion (opsional, experimental)
+        if: ${{ github.event.inputs.vulkan_target == 'force-1.4-all-chips' }}
+        run: |
+          set -e
+          FILE="mesa-src/src/freedreno/vulkan/tu_device.cc"
+
+          echo "::warning::Memaksa semua chip generation (termasuk a6xx/Adreno 610) report Vulkan 1.4. Upstream sengaja membatasi 1.4 hanya untuk chip>=7 (a7xx+) karena sebagian fitur wajib 1.4 belum tentu utuh di a6xx. Ini experimental, uji dulu sebelum dipakai harian."
+
+          if ! grep -q "chip >= 7" "$FILE"; then
+            echo "::error::Pola kondisi 'chip >= 7' tidak ditemukan di $FILE. Struktur kode Mesa versi ini mungkin sudah berubah -> patch dilewati, laporkan versi Mesa yang dipakai."
+            exit 1
+          fi
+
+          echo "Sebelum patch:"
+          grep -n -A3 "props->apiVersion" "$FILE" | head -8
+
+          python3 - "$FILE" <<'PYEOF'
+          import re, sys
+          path = sys.argv[1]
+          src = open(path).read()
+          pattern = re.compile(
+              r"tu_has_multiview\(pdevice\)\s*\?\s*"
+              r"\(\(pdevice->info->chip >= 7\) \? TU_API_VERSION :\s*"
+              r"VK_MAKE_VERSION\(1, 3, VK_HEADER_VERSION\)\)\s*"
+              r": VK_MAKE_VERSION\(1, 0, VK_HEADER_VERSION\);"
+          )
+          replacement = (
+              "tu_has_multiview(pdevice) ?\n"
+              "         TU_API_VERSION\n"
+              "         : VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION);"
+          )
+          new_src, n = pattern.subn(replacement, src)
+          if n == 0:
+              print("::error::Regex tidak match, patch dibatalkan.")
+              sys.exit(1)
+          open(path, "w").write(new_src)
+          print(f"Patch berhasil diterapkan ({n}x).")
+          PYEOF
+
+          echo "Sesudah patch:"
+          grep -n -A3 "props->apiVersion" "$FILE" | head -8
+
+      # ---------------------------------------------------------------
+      # 4. Konfigurasi meson: X11, driver freedreno (Turnip) + zink,
+      #    freedreno-kmds=kgsl -> WAJIB untuk jalan di atas kernel Android.
+      #    (Turnip default 'msm' itu untuk DRM desktop Linux, bukan Android.)
+      # ---------------------------------------------------------------
+      - name: Meson setup
+        working-directory: mesa-src
+        run: |
+          set -e
+          meson setup build \
+            --prefix=/usr \
+            --libdir=lib/aarch64-linux-gnu \
+            --buildtype=${BUILDTYPE} \
+            -Dplatforms=x11 \
+            -Dglx=dri \
+            -Degl=enabled \
+            -Dgbm=enabled \
+            -Dgallium-drivers=zink \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=${FREEDRENO_KMD} \
+            -Dvulkan-beta=true \
+            -Dllvm=disabled \
+            -Dshared-glapi=enabled \
+            -Dgles2=enabled \
+            -Dvalgrind=disabled \
+            -Db_ndebug=true
+
+      - name: Build (ninja)
+        working-directory: mesa-src
+        run: ninja -C build -j"$(nproc)"
+
+      - name: Install to staging dir
+        working-directory: mesa-src
+        run: DESTDIR="${{ github.workspace }}/staging" ninja -C build install
+
+      # ---------------------------------------------------------------
+      # 5. Kumpulkan hanya file yang relevan untuk ExaGear
+      #    (driver Vulkan Turnip + driver GL Zink + loader terkait)
+      # ---------------------------------------------------------------
+      - name: Package artifact
+        run: |
+          set -e
+          OUT="turnip-zink-exagear-${MESA_VERSION}-${BUILD_REV}-aarch64"
+          mkdir -p "$OUT/lib" "$OUT/share/vulkan/icd.d"
+
+          LIBDIR="staging/usr/lib/aarch64-linux-gnu"
+
+          cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
+          find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
+
+          find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "libEGL*.so*" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "libGLX*.so*" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "libgbm*.so*" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
+
+          echo "Isi paket:"
+          find "$OUT" -type f
+
+          echo "$MESA_VERSION" > "$OUT/MESA_VERSION.txt"
+          echo "freedreno-kmds=$FREEDRENO_KMD" >> "$OUT/MESA_VERSION.txt"
+          echo "vulkan_target=$VK_TARGET" >> "$OUT/MESA_VERSION.txt"
+
+          tar -czf "${OUT}.tar.gz" "$OUT"
+          echo "ARTIFACT_NAME=${OUT}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: turnip-zink-exagear-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+          
