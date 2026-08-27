@@ -140,7 +140,7 @@ jobs:
         run: |
           set -e
           apt-get install -y --no-install-recommends \
-            libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev uuid-dev
+            make libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev uuid-dev
 
           PY_VER="3.9.18"
           curl -fL --retry 4 --retry-delay 5 \
