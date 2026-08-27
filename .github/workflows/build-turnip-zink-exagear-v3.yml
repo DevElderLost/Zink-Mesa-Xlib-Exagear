@@ -89,11 +89,25 @@ jobs:
       - name: Fix APT mirror (bionic EOL -> old-releases)
         run: |
           set -e
-          sed -i \
-            -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
-            -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
-            -e 's|http://ports.ubuntu.com/ubuntu-ports|http://old-releases.ubuntu.com/ubuntu|g' \
-            /etc/apt/sources.list
+          echo "=== Diagnostik base image ==="
+          uname -m
+          cat /etc/os-release || true
+          echo "=== sources.list ASLI (sebelum diubah) ==="
+          cat /etc/apt/sources.list || true
+          ls /etc/apt/sources.list.d/ 2>/dev/null || true
+
+          echo "=== Menimpa total sources.list dengan entri old-releases yang valid ==="
+          cat > /etc/apt/sources.list <<'EOF'
+          deb http://old-releases.ubuntu.com/ubuntu/ bionic main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ bionic-updates main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ bionic-backports main restricted universe multiverse
+          deb http://old-releases.ubuntu.com/ubuntu/ bionic-security main restricted universe multiverse
+          EOF
+          rm -f /etc/apt/sources.list.d/*.list 2>/dev/null || true
+
+          echo "=== Cek raw HTTP ke Release file (buat diagnosa kalau masih gagal) ==="
+          curl -sSI "http://old-releases.ubuntu.com/ubuntu/dists/bionic/Release" || true
+
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates software-properties-common gnupg curl git
