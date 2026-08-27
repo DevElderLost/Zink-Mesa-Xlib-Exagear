@@ -132,14 +132,14 @@ jobs:
           set -e
           add-apt-repository -y ppa:ubuntu-toolchain-r/test
           apt-get update
-          apt-get install -y --no-install-recommends gcc-10 g++-10
+          apt-get install -y --allow-downgrades --no-install-recommends gcc-10 g++-10
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
 
       - name: Compile Python 3.9 dari source (portable, tidak butuh PPA)
         run: |
           set -e
-          apt-get install -y --no-install-recommends \
+          apt-get install -y --allow-downgrades --no-install-recommends \
             make libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev uuid-dev
 
           PY_VER="3.9.18"
@@ -172,7 +172,7 @@ jobs:
       - name: Install build dependencies (i386 native)
         run: |
           set -e
-          apt-get install -y --no-install-recommends \
+          apt-get install -y --allow-downgrades --no-install-recommends \
             build-essential pkg-config ninja-build bison flex \
             python3-mako python3-yaml \
             libdrm-dev libx11-dev libxext-dev libxfixes-dev \
