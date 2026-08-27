@@ -1,0 +1,276 @@
+name: Build Turnip+Zink for ExaGear (Ubuntu 18.04 bionic x86 i386)
+
+# Build libvulkan_freedreno.so (Turnip) + libGL.so.1 (Zink lewat GLX classic)
+# dari Mesa upstream resmi, ditarget i386/x86 glibc untuk rootfs Ubuntu 18.04
+# bionic di dalam ExaGear (EDPatch-Fork).
+#
+# KENAPA NATIF, BUKAN CROSS-COMPILE:
+# CPU x86_64 punya mode kompatibilitas 32-bit bawaan hardware, jadi biner
+# i386 bisa dieksekusi LANGSUNG oleh kernel tanpa emulasi (beda dengan
+# aarch64 yang butuh cross-toolchain/QEMU). Karena itu kita pakai image
+# Docker "i386/ubuntu:18.04" (varian arsitektur i386 resmi dari Docker Hub)
+# sebagai container job -> semua apt package yang ter-install otomatis
+# i386 asli, tidak perlu suffix ":i386" atau multiarch tambahan.
+#
+# Sumber Mesa: mirror GitHub resmi dari gitlab.freedesktop.org/mesa/mesa
+# (chaotic-cx/mesa-mirror, sync tiap 5 menit, tag ikut skema resmi mesa-X.Y.Z).
+#
+# CATATAN RISIKO:
+# Ubuntu 18.04 bawaannya GCC 7 + Python 3.6 + Meson lawas -> Mesa upstream
+# terbaru (mesa_version default di bawah) butuh compiler & Meson yang jauh
+# lebih baru. Job ini mem-bootstrap GCC 10 (ppa:ubuntu-toolchain-r/test)
+# dan Python 3.9 (ppa:deadsnakes/ppa) di atas base 18.04, lalu install Meson
+# lewat pip3.9. Kalau versi Mesa yang kamu pilih tetap gagal build (fitur
+# C++ terlalu baru / Meson requirement terlalu tinggi), coba tag Mesa yang
+# lebih lama sampai kompatibel dengan toolchain bionic yang di-bootstrap.
+#
+# Trigger manual lewat tab "Actions" -> "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_version:
+        description: "Tag Mesa upstream (lihat: github.com/chaotic-cx/mesa-mirror/tags)"
+        required: true
+        default: "mesa-26.2.1"
+      freedreno_kmd:
+        description: "Kernel-mode driver target (Android pakai kgsl, BUKAN msm/DRM desktop)"
+        required: true
+        default: "kgsl"
+        type: choice
+        options:
+          - "kgsl"
+          - "msm,kgsl"
+      vulkan_target:
+        description: "Target apiVersion Turnip"
+        required: true
+        default: "stock"
+        type: choice
+        options:
+          - "stock"
+          - "force-1.4-all-chips"
+      buildtype:
+        description: "Meson buildtype"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - "release"
+          - "debugoptimized"
+          - "debug"
+      build_revision:
+        description: "Nomor revisi build kamu sendiri (R1, R2, dst - cuma untuk penamaan artifact)"
+        required: true
+        default: "R1"
+
+env:
+  MESA_VERSION: ${{ github.event.inputs.mesa_version }}
+  FREEDRENO_KMD: ${{ github.event.inputs.freedreno_kmd }}
+  VK_TARGET: ${{ github.event.inputs.vulkan_target }}
+  BUILDTYPE: ${{ github.event.inputs.buildtype }}
+  BUILD_REV: ${{ github.event.inputs.build_revision }}
+  MIRROR_REPO: "chaotic-cx/mesa-mirror"
+
+jobs:
+  build:
+    # Host runner tetap amd64 biasa. Container image i386/ubuntu:18.04
+    # (varian arsitektur resmi Docker Hub) yang bikin semua proses build
+    # jadi native i386, bukan cross-compile.
+    runs-on: ubuntu-24.04
+    container:
+      image: i386/ubuntu:18.04
+
+    steps:
+      # ---------------------------------------------------------------
+      # 1. Fix APT: Ubuntu 18.04 sudah EOL, archive.ubuntu.com/
+      #    security.ubuntu.com sudah tidak melayani bionic -> alihkan
+      #    ke old-releases.ubuntu.com (arsip resmi Canonical utk rilis EOL).
+      # ---------------------------------------------------------------
+      - name: Fix APT mirror (bionic EOL -> old-releases)
+        run: |
+          set -e
+          sed -i \
+            -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
+            -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
+            -e 's|http://ports.ubuntu.com/ubuntu-ports|http://old-releases.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates software-properties-common gnupg curl git
+
+      # ---------------------------------------------------------------
+      # 2. Bootstrap GCC 10 + Python 3.9 di atas base bionic supaya
+      #    kompatibel dengan requirement Mesa upstream & Meson modern.
+      # ---------------------------------------------------------------
+      - name: Bootstrap newer GCC & Python via PPA
+        run: |
+          set -e
+          add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            gcc-10 g++-10 python3.9 python3.9-distutils python3.9-dev
+          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+          curl -sS https://bootstrap.pypa.io/pip/3.9/get-pip.py -o get-pip.py
+          python3.9 get-pip.py
+          python3.9 -m pip install --upgrade "meson==1.3.2"
+
+      # ---------------------------------------------------------------
+      # 3. Install dependency build i386 asli (Xlib/EGL/GLX/Vulkan/LLVM)
+      #    Tidak perlu suffix ":i386" -> base image sudah i386.
+      # ---------------------------------------------------------------
+      - name: Install build dependencies (i386 native)
+        run: |
+          set -e
+          apt-get install -y --no-install-recommends \
+            build-essential pkg-config ninja-build bison flex \
+            python3-mako python3-yaml \
+            libdrm-dev libx11-dev libxext-dev libxfixes-dev \
+            libxshmfence-dev libxxf86vm-dev libxdamage-dev \
+            libx11-xcb-dev libxcb-glx0-dev libxcb-shm0-dev libxcb-dri2-0-dev \
+            libxcb-dri3-dev libxcb-present-dev libxcb-sync-dev \
+            libxcb-xfixes0-dev libxcb-randr0-dev \
+            libxrandr-dev libwayland-dev wayland-protocols \
+            libelf-dev zlib1g-dev libzstd-dev libexpat1-dev \
+            llvm-10-dev \
+            glslang-tools spirv-tools libvulkan-dev
+
+      # ---------------------------------------------------------------
+      # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
+      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
+      # ---------------------------------------------------------------
+      - name: Download Mesa upstream via codeload
+        run: |
+          set -e
+          echo "Mengunduh ${MIRROR_REPO}@${MESA_VERSION} dari codeload..."
+          curl -fL --retry 4 --retry-delay 5 \
+            -o mesa-src.tar.gz \
+            "https://codeload.github.com/${MIRROR_REPO}/tar.gz/refs/tags/${MESA_VERSION}"
+
+          mkdir -p mesa-src
+          tar -xzf mesa-src.tar.gz -C mesa-src --strip-components=1
+          echo "Isi VERSION:"
+          cat mesa-src/VERSION || true
+
+      # ---------------------------------------------------------------
+      # 5. (Opsional) Patch apiVersion Turnip supaya semua chip generation
+      #    (termasuk a6xx / Adreno 610) di-report sebagai Vulkan 1.4.
+      # ---------------------------------------------------------------
+      - name: Patch Turnip apiVersion (opsional, experimental)
+        if: ${{ github.event.inputs.vulkan_target == 'force-1.4-all-chips' }}
+        run: |
+          set -e
+          FILE="mesa-src/src/freedreno/vulkan/tu_device.cc"
+
+          echo "::warning::Memaksa semua chip generation (termasuk a6xx/Adreno 610) report Vulkan 1.4. Upstream sengaja membatasi 1.4 hanya untuk chip>=7 (a7xx+). Ini experimental, uji dulu sebelum dipakai harian."
+
+          if ! grep -q "chip >= 7" "$FILE"; then
+            echo "::error::Pola kondisi 'chip >= 7' tidak ditemukan di $FILE. Struktur kode Mesa versi ini mungkin sudah berubah -> patch dilewati, laporkan versi Mesa yang dipakai."
+            exit 1
+          fi
+
+          echo "Sebelum patch:"
+          grep -n -A3 "props->apiVersion" "$FILE" | head -8
+
+          python3.9 - "$FILE" <<'PYEOF'
+          import re, sys
+          path = sys.argv[1]
+          src = open(path).read()
+          pattern = re.compile(
+              r"tu_has_multiview\(pdevice\)\s*\?\s*"
+              r"\(\(pdevice->info->chip >= 7\) \? TU_API_VERSION :\s*"
+              r"VK_MAKE_VERSION\(1, 3, VK_HEADER_VERSION\)\)\s*"
+              r": VK_MAKE_VERSION\(1, 0, VK_HEADER_VERSION\);"
+          )
+          replacement = (
+              "tu_has_multiview(pdevice) ?\n"
+              "         TU_API_VERSION\n"
+              "         : VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION);"
+          )
+          new_src, n = pattern.subn(replacement, src)
+          if n == 0:
+              print("::error::Regex tidak match, patch dibatalkan.")
+              sys.exit(1)
+          open(path, "w").write(new_src)
+          print(f"Patch berhasil diterapkan ({n}x).")
+          PYEOF
+
+          echo "Sesudah patch:"
+          grep -n -A3 "props->apiVersion" "$FILE" | head -8
+
+      # ---------------------------------------------------------------
+      # 6. Konfigurasi meson: X11, driver freedreno (Turnip) + zink,
+      #    libdir i386-linux-gnu (bukan aarch64-linux-gnu lagi),
+      #    llvm=enabled (sesuai versi lama yang sudah terbukti jalan;
+      #    LLVM di sini cuma dependency shared gallium/libGL, tidak
+      #    dipakai jalur render Turnip->Zink, jadi tidak mempengaruhi
+      #    performa game).
+      # ---------------------------------------------------------------
+      - name: Meson setup
+        working-directory: mesa-src
+        run: |
+          set -e
+          python3.9 -m mesonbuild.mesonmain setup build \
+            --prefix=/usr \
+            --libdir=lib/i386-linux-gnu \
+            --buildtype=${BUILDTYPE} \
+            -Dplatforms=x11 \
+            -Dglx=dri \
+            -Degl=enabled \
+            -Dgbm=disabled \
+            -Dgallium-drivers=zink \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=${FREEDRENO_KMD} \
+            -Dvulkan-beta=true \
+            -Dllvm=enabled \
+            -Dshared-glapi=enabled \
+            -Dgles2=enabled \
+            -Dvalgrind=disabled \
+            -Db_ndebug=true
+
+      - name: Build (ninja)
+        working-directory: mesa-src
+        run: ninja -C build -j"$(nproc)"
+
+      - name: Install to staging dir
+        working-directory: mesa-src
+        run: DESTDIR="${{ github.workspace }}/staging" ninja -C build install
+
+      # ---------------------------------------------------------------
+      # 7. Kumpulkan hanya file yang relevan untuk ExaGear
+      #    (driver Vulkan Turnip + libGL classic buat Zink + loader terkait)
+      # ---------------------------------------------------------------
+      - name: Package artifact
+        run: |
+          set -e
+          OUT="turnip-zink-exagear-${MESA_VERSION}-${BUILD_REV}-i386"
+          mkdir -p "$OUT/lib" "$OUT/share/vulkan/icd.d"
+
+          LIBDIR="staging/usr/lib/i386-linux-gnu"
+
+          cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
+          find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
+
+          find "$LIBDIR" -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
+
+          echo "Isi paket:"
+          find "$OUT" -type f
+
+          echo "$MESA_VERSION" > "$OUT/MESA_VERSION.txt"
+          echo "freedreno-kmds=$FREEDRENO_KMD" >> "$OUT/MESA_VERSION.txt"
+          echo "vulkan_target=$VK_TARGET" >> "$OUT/MESA_VERSION.txt"
+          echo "target=i386 (Ubuntu 18.04 bionic, native)" >> "$OUT/MESA_VERSION.txt"
+
+          tar -czf "${OUT}.tar.gz" "$OUT"
+          echo "ARTIFACT_NAME=${OUT}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: turnip-zink-exagear-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
