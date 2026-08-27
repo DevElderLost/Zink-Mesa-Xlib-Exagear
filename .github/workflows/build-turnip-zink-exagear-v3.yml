@@ -149,7 +149,7 @@ jobs:
           extract_deb() {
             local pkg="$1"
             local dir="/tmp/extract-${pkg}"
-            mkdir -p "$dir" && cd "$dir"
+            mkdir -p "$dir" && chmod 777 "$dir" && cd "$dir"
             apt-get download "$pkg"
             dpkg -x "${pkg}"_*.deb .
             # Salin PERSIS struktur folder aslinya ke /usr (bukan cuma
