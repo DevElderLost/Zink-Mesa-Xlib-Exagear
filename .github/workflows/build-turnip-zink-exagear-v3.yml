@@ -285,7 +285,7 @@ jobs:
             -DENABLE_GLSLANG_JS=OFF \
             -DBUILD_TESTING=OFF \
             -DENABLE_HLSL=OFF
-          make -j"$(nproc)" glslangValidator
+          make -j"$(nproc)"
 
           find . -name "glslangValidator" -type f -exec cp -v {} /usr/local/bin/ \;
           chmod +x /usr/local/bin/glslangValidator
