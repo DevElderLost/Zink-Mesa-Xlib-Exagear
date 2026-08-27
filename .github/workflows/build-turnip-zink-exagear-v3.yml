@@ -115,13 +115,9 @@ jobs:
           echo 'Acquire::https::Verify-Host "false";' >> /etc/apt/apt.conf.d/99no-check-cert
 
           apt-get update
-          apt-get install -y --no-install-recommends \
+          apt-mark unhold gnupg gpgv dpkg apt 2>/dev/null || true
+          apt-get install -y --allow-downgrades --no-install-recommends \
             ca-certificates software-properties-common gnupg curl git
-
-          # Setelah ca-certificates asli ter-install, verifikasi SSL diaktifkan
-          # kembali biar step-step selanjutnya (PPA, pip, curl codeload) aman.
-          rm -f /etc/apt/apt.conf.d/99no-check-cert
-          apt-get update
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 + Python 3.9 di atas base bionic supaya
