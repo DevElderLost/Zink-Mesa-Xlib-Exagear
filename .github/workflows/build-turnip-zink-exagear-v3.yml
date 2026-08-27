@@ -140,8 +140,7 @@ jobs:
         run: |
           set -e
           apt-get install -y --no-install-recommends \
-            libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
-            libncurses5-dev libgdbm-dev liblzma-dev tk-dev libffi-dev uuid-dev
+            libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev uuid-dev
 
           PY_VER="3.9.18"
           curl -fL --retry 4 --retry-delay 5 \
