@@ -156,8 +156,9 @@ jobs:
             # pattern .h/.so tertentu) -> aman utk paket kompleks kayak
             # llvm-10-dev yang punya subfolder sendiri (/usr/lib/llvm-10/...,
             # /usr/include/llvm-10/...), bukan cuma file lepas di /usr/include.
-            [ -d ./usr ] && cp -a ./usr/. /usr/
-            [ -d ./etc ] && cp -a ./etc/. /etc/
+            if [ -d ./usr ]; then cp -a ./usr/. /usr/; fi
+            if [ -d ./etc ]; then cp -a ./etc/. /etc/; fi
+            return 0
           }
           mkdir -p /usr/lib/i386-linux-gnu/pkgconfig
           extract_deb libtinfo-dev
