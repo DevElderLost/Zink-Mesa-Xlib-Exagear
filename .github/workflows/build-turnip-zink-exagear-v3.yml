@@ -144,8 +144,14 @@ jobs:
           # dependency ke "perl" yang konsisten bentrok versi di snapshot
           # ini, dan kita TIDAK BUTUH dpkg-dev sama sekali utk build Mesa
           # (itu cuma dipakai utk bikin paket .deb, bukan compile).
+          # libtinfo5 yang sudah ter-bake di base image (.18.04.1) lebih
+          # baru dari versi apapun yang ada di archive snapshot kita
+          # (cuma sampai .18.04 tanpa patch tambahan). Pin eksplisit versi
+          # yang tersedia di archive supaya libtinfo5+libtinfo-dev konsisten.
+          TINFO_VER="$(apt-cache policy libtinfo-dev | awk '/Candidate:/{print $2; exit}')"
+          echo "Pakai versi libtinfo: ${TINFO_VER}"
           apt-get install -y --allow-downgrades --fix-broken --no-install-recommends \
-            libtinfo-dev libtinfo5
+            "libtinfo5=${TINFO_VER}" "libtinfo-dev=${TINFO_VER}"
 
       # ---------------------------------------------------------------
       # 2. Bootstrap GCC 10 (via PPA, tersedia utk i386) + Python 3.9
