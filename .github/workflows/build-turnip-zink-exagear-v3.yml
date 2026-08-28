@@ -200,11 +200,11 @@ jobs:
           set -e
           add-apt-repository -y ppa:ubuntu-toolchain-r/test
           apt-get update
-          apt-get install -y --allow-downgrades --no-install-recommends gcc-10 g++-10
-          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
-          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-          update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-10 100
-          update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-10 100
+          apt-get install -y --allow-downgrades --no-install-recommends gcc-12 g++-12
+          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-12 100
+          update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-12 100
 
       - name: Compile Python 3.9 dari source (portable, tidak butuh PPA)
         run: |
