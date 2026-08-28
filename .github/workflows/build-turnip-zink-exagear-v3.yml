@@ -138,6 +138,9 @@ jobs:
       - name: Perbaiki paket inti (extract manual, hindari perl/dpkg-dev)
         run: |
           set -ex
+          # libatomic1 dibutuhkan llvm-config-10 saat runtime (dicek lewat
+          # apt normal karena ini lib dasar tanpa dependency perl/dpkg-dev).
+          apt-get install -y --allow-downgrades --no-install-recommends libatomic1
           # Trik yang sama dipakai berulang di sini: "apt-get download" HANYA
           # mengunduh file .deb TANPA melalui dpkg install (TIDAK memicu
           # resolusi dependency apapun -> tidak ada downgrade/removal
