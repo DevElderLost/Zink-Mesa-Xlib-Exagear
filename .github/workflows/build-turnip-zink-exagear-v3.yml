@@ -521,7 +521,7 @@ jobs:
             -Dglx=xlib \
             -Degl=disabled \
             -Dgbm=disabled \
-            -Dgallium-drivers=zink \
+            -Dgallium-drivers=zink,swrast \
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=${FREEDRENO_KMD} \
             -Dvulkan-beta=true \
