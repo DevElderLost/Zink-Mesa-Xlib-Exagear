@@ -548,7 +548,13 @@ jobs:
           OUT="turnip-zink-exagear-${MESA_VERSION}-${BUILD_REV}-i386"
           mkdir -p "$OUT/lib" "$OUT/share/vulkan/icd.d"
 
-          LIBDIR="staging/usr/lib/i386-linux-gnu"
+          LIBDIR="${{ github.workspace }}/staging/usr/lib/i386-linux-gnu"
+
+          if [ ! -d "$LIBDIR" ]; then
+            echo "::error::LIBDIR tidak ketemu di $LIBDIR, mencari lokasi staging asli..."
+            find / -maxdepth 6 -type d -name "staging" 2>/dev/null
+            exit 1
+          fi
 
           cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
           find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
