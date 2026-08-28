@@ -203,6 +203,8 @@ jobs:
           apt-get install -y --allow-downgrades --no-install-recommends gcc-10 g++-10
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+          update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-10 100
+          update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-10 100
 
       - name: Compile Python 3.9 dari source (portable, tidak butuh PPA)
         run: |
