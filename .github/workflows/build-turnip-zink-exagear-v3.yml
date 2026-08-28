@@ -400,6 +400,29 @@ jobs:
       # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
       #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
       # ---------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 3e. Ambil header kernel UAPI "linux/dma-heap.h" yang belum ada di
+      #     linux-libc-dev bawaan bionic (header ini baru masuk kernel
+      #     mainline sejak 5.6+, sedangkan bionic berbasis kernel 4.15).
+      #     Header ini cuma definisi struct/ioctl polos -> aman diambil
+      #     langsung, tidak perlu kernel yang benar-benar cocok jalan di
+      #     sistem build (dipakai Turnip buat kgsl DMA-BUF heap alloc).
+      # ---------------------------------------------------------------
+      - name: Tambahkan header kernel dma-heap.h yang hilang
+        run: |
+          set -e
+          mkdir -p /usr/include/linux
+          curl -fL --retry 4 --retry-delay 5 \
+            -o /usr/include/linux/dma-heap.h \
+            "https://raw.githubusercontent.com/torvalds/linux/v5.15/include/uapi/linux/dma-heap.h"
+          echo "=== Verifikasi ==="
+          head -5 /usr/include/linux/dma-heap.h
+
+
+      # ---------------------------------------------------------------
+      # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
+      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
+      # ---------------------------------------------------------------
       - name: Download Mesa upstream via codeload
         run: |
           set -e
