@@ -548,7 +548,7 @@ jobs:
         run: |
           set -e
           OUT="turnip-zink-exagear-${MESA_VERSION}-${BUILD_REV}-i386"
-          mkdir -p "$OUT/lib" "$OUT/share/vulkan/icd.d"
+          mkdir -p "$OUT/lib/dri" "$OUT/share/vulkan/icd.d"
 
           LIBDIR="${{ github.workspace }}/staging/usr/lib/i386-linux-gnu"
 
@@ -558,12 +558,26 @@ jobs:
             exit 1
           fi
 
+          echo "=== DIAGNOSTIK: seluruh isi LIBDIR (biar kelihatan semua file yang ke-build) ==="
+          find "$LIBDIR" -maxdepth 2 -type f -exec ls -la {} \;
+
           cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
           find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
 
-          find "$LIBDIR" -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
-          find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/" \;
+          # libGL.so* -> sejajar lib/ (loader)
+          find "$LIBDIR" -maxdepth 1 -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
+
+          # zink_dri.so WAJIB masuk subfolder dri/ (bukan rata di lib/),
+          # karena LIBGL_DRIVERS_PATH nantinya diarahkan ke folder dri/ ini.
+          find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/dri/" \;
+
+          # libglapi -> dependency runtime WAJIB utk libGL.so.1 (shared-glapi
+          # enabled). Cari lebih luas (termasuk nested di subfolder) kalau-
+          # kalau tidak ketemu di root LIBDIR.
           find "$LIBDIR" -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
+          if ! ls "$OUT/lib/"libglapi* >/dev/null 2>&1; then
+            echo "::warning::libglapi.so TIDAK ketemu sama sekali di LIBDIR! Ini bisa bikin libGL.so.1 gagal load di ExaGear. Cek diagnostik di atas."
+          fi
 
           echo "Isi paket:"
           find "$OUT" -type f
