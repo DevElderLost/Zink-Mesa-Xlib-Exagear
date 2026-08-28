@@ -163,6 +163,7 @@ jobs:
           mkdir -p /usr/lib/i386-linux-gnu/pkgconfig
           extract_deb libtinfo-dev
           extract_deb pkg-config
+          extract_deb llvm-10
           extract_deb llvm-10-dev
           # Binary di paket ini bernama "llvm-config-10" (ber-suffix versi),
           # tapi Meson/Mesa mencari nama generik "llvm-config" polos ->
