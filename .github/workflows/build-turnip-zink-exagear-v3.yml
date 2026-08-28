@@ -354,6 +354,13 @@ jobs:
           cd zstd-src
           make -j"$(nproc)" PREFIX=/usr
           make install PREFIX=/usr
+          # PENTING: Makefile zstd install ke /usr/lib biasa, TAPI sistem
+          # ini multiarch (Debian/Ubuntu) -> linker cari lib duluan di
+          # /usr/lib/i386-linux-gnu/ (prioritas lebih tinggi drpd /usr/lib
+          # polos), dan di situ masih ada libzstd.so LAMA dari apt
+          # (libzstd-dev bionic) yang bikin linker tetap pakai versi tua.
+          # Timpa manual supaya linker pasti pakai versi baru kita.
+          cp -av lib/libzstd.so* /usr/lib/i386-linux-gnu/
           ldconfig
           echo "=== Verifikasi ==="
           pkg-config --modversion libzstd
