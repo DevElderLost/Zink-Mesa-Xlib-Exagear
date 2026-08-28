@@ -287,7 +287,17 @@ jobs:
             -DENABLE_HLSL=OFF
           make -j"$(nproc)"
 
-          find . -name "glslangValidator" -type f -exec cp -v {} /usr/local/bin/ \;
+          # Binary hasil compile bernama "glslang" (target CMake-nya
+          # "glslang-standalone"), BUKAN "glslangValidator" -> perlu
+          # disalin dengan nama baru karena Mesa secara spesifik mencari
+          # nama persis "glslangValidator" via find_program().
+          GLSLANG_BIN="$(find . -type f -name "glslang" -path "*StandAlone*" | head -1)"
+          if [ -z "$GLSLANG_BIN" ]; then
+            echo "::error::Binary 'glslang' hasil compile tidak ketemu di StandAlone/"
+            find . -maxdepth 3 -type f -executable
+            exit 1
+          fi
+          cp -v "$GLSLANG_BIN" /usr/local/bin/glslangValidator
           chmod +x /usr/local/bin/glslangValidator
           glslangValidator --version || true
 
