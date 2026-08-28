@@ -384,7 +384,7 @@ jobs:
           BISON_VER="3.8.2"
           curl -fL --retry 4 --retry-delay 5 \
             -o bison.tar.gz \
-            "https://ftp.gnu.org/gnu/bison/bison-${BISON_VER}.tar.gz"
+            "https://mirrors.kernel.org/gnu/bison/bison-${BISON_VER}.tar.gz"
           mkdir -p bison-src
           tar -xzf bison.tar.gz -C bison-src --strip-components=1
           cd bison-src
