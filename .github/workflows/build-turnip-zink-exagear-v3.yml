@@ -370,6 +370,36 @@ jobs:
       # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
       #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
       # ---------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 3d. Compile bison terbaru dari source. bison bawaan bionic (~3.0)
+      #     tidak dukung flag "--warning=counterexamples" yang dipakai
+      #     Mesa (fitur baru dari bison >=3.5). m4 dipakai bison sendiri,
+      #     aman dari apt (tidak menyeret perl/dpkg-dev).
+      # ---------------------------------------------------------------
+      - name: Compile bison terbaru dari source
+        run: |
+          set -e
+          apt-get install -y --allow-downgrades --no-install-recommends m4
+
+          BISON_VER="3.8.2"
+          curl -fL --retry 4 --retry-delay 5 \
+            -o bison.tar.gz \
+            "https://ftp.gnu.org/gnu/bison/bison-${BISON_VER}.tar.gz"
+          mkdir -p bison-src
+          tar -xzf bison.tar.gz -C bison-src --strip-components=1
+          cd bison-src
+          ./configure --prefix=/usr/local
+          make -j"$(nproc)"
+          make install
+          hash -r
+          echo "=== Versi bison terpasang ==="
+          /usr/local/bin/bison --version | head -1
+
+
+      # ---------------------------------------------------------------
+      # 4. Ambil source Mesa upstream lewat codeload tarball dari mirror
+      #    GitHub resmi (bukan git clone -> lebih cepat, tanpa histori git).
+      # ---------------------------------------------------------------
       - name: Download Mesa upstream via codeload
         run: |
           set -e
