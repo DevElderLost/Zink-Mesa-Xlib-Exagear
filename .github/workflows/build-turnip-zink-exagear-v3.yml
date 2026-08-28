@@ -524,7 +524,7 @@ jobs:
             -Dfreedreno-kmds=${FREEDRENO_KMD} \
             -Dvulkan-beta=true \
             -Dvulkan-layers= \
-            -Dllvm=enabled \
+            -Dllvm=disabled \
             -Dshared-glapi=enabled \
             -Dgles2=enabled \
             -Dvalgrind=disabled \
