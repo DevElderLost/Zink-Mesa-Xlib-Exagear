@@ -564,14 +564,20 @@ jobs:
           cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
           find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
 
-          # Mode xlib = tidak ada dynamic DRI loading (aman dari ExaGear
-          # binary translator), TAPI shared-glapi tetap enabled -> libGL.so.1
-          # tetap butuh libglapi.so.0 terpisah sebagai dependency runtime
-          # (Wine sendiri kadang juga dlopen langsung ke libglapi).
+          # Mode xlib = tidak ada dynamic DRI loading via LIBGL_DRIVERS_PATH
+          # utk hardware driver (aman dari ExaGear binary translator).
+          # libglapi.so TERBUKTI tidak pernah ke-build di mode xlib (sudah
+          # dikonfirmasi via diagnostik LIBDIR berkali-kali, terlepas dari
+          # shared-glapi enabled/disabled) -> Mesa xlib GLX path meng-
+          # override opsi ini secara internal, TIDAK perlu dipaksakan.
           find "$LIBDIR" -maxdepth 1 -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
-          find "$LIBDIR" -maxdepth 1 -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
-          if ! ls "$OUT/lib/"libglapi* >/dev/null 2>&1; then
-            echo "::warning::libglapi.so TIDAK ketemu di LIBDIR meski shared-glapi=enabled. Cek diagnostik isi LIBDIR di atas."
+
+          # libdril_dri.so: komponen shim internal yang dipakai libGL.so.1
+          # mode xlib utk software fallback path -> sertakan juga, taruh
+          # di subfolder dri/ (mengikuti struktur asli LIBDIR).
+          if [ -d "$LIBDIR/dri" ]; then
+            mkdir -p "$OUT/lib/dri"
+            find "$LIBDIR/dri" -maxdepth 1 -type f -exec cp -v {} "$OUT/lib/dri/" \;
           fi
 
           echo "Isi paket:"
