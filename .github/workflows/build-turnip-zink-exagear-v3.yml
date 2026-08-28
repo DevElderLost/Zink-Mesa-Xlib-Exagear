@@ -164,6 +164,16 @@ jobs:
           extract_deb libtinfo-dev
           extract_deb pkg-config
           extract_deb llvm-10-dev
+          # Binary di paket ini bernama "llvm-config-10" (ber-suffix versi),
+          # tapi Meson/Mesa mencari nama generik "llvm-config" polos ->
+          # symlink, pola yang sama seperti kasus python3 sebelumnya.
+          LLVM_CONFIG_BIN="$(find /usr -type f -name "llvm-config-10" 2>/dev/null | head -1)"
+          if [ -n "$LLVM_CONFIG_BIN" ]; then
+            ln -sf "$LLVM_CONFIG_BIN" /usr/local/bin/llvm-config
+            echo "llvm-config -> $LLVM_CONFIG_BIN"
+          else
+            echo "::warning::llvm-config-10 tidak ketemu setelah extract llvm-10-dev"
+          fi
           ldconfig
           echo "=== Verifikasi ==="
           which pkg-config && pkg-config --version
