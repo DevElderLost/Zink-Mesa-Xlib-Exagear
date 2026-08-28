@@ -437,6 +437,23 @@ jobs:
           cat mesa-src/VERSION || true
 
       # ---------------------------------------------------------------
+      # 4b. DIAGNOSTIK: tampilkan isi tu_autotune.h supaya bisa dianalisa
+      #     dan dipatch presisi di iterasi berikutnya (bukan patch buta).
+      #     Error compile: struct tu_autotune::rp_history di-forward-
+      #     declare tapi dipakai sebagai value type di unordered_map
+      #     sebelum definisi lengkapnya ada -> perlu lihat urutan asli
+      #     di source utk tahu cara aman mindahkan/reorder definisinya.
+      # ---------------------------------------------------------------
+      - name: "DIAGNOSTIK: tampilkan tu_autotune.h"
+        run: |
+          set -e
+          echo "=== src/freedreno/vulkan/tu_autotune.h (lengkap, dengan nomor baris) ==="
+          cat -n mesa-src/src/freedreno/vulkan/tu_autotune.h
+          echo ""
+          echo "=== Cari deklarasi 'struct rp_history' di seluruh file terkait ==="
+          grep -rn "struct rp_history\|rp_history {" mesa-src/src/freedreno/vulkan/ || true
+
+      # ---------------------------------------------------------------
       # 5. (Opsional) Patch apiVersion Turnip supaya semua chip generation
       #    (termasuk a6xx / Adreno 610) di-report sebagai Vulkan 1.4.
       # ---------------------------------------------------------------
