@@ -32,7 +32,7 @@ on:
       mesa_version:
         description: "Tag Mesa upstream (lihat: github.com/chaotic-cx/mesa-mirror/tags)"
         required: true
-        default: "mesa-26.2.1"
+        default: "mesa-24.3.0"
       freedreno_kmd:
         description: "Kernel-mode driver target (Android pakai kgsl, BUKAN msm/DRM desktop)"
         required: true
@@ -521,12 +521,12 @@ jobs:
             -Dglx=xlib \
             -Degl=disabled \
             -Dgbm=disabled \
-            -Dgallium-drivers=zink,softpipe \
+            -Dgallium-drivers=zink,llvmpipe \
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=${FREEDRENO_KMD} \
             -Dvulkan-beta=true \
             -Dvulkan-layers= \
-            -Dllvm=disabled \
+            -Dllvm=enabled \
             -Dshared-glapi=enabled \
             -Dgles2=enabled \
             -Dvalgrind=disabled \
