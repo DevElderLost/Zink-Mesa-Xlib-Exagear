@@ -527,7 +527,7 @@ jobs:
             -Dvulkan-beta=true \
             -Dvulkan-layers= \
             -Dllvm=disabled \
-            -Dshared-glapi=disabled \
+            -Dshared-glapi=enabled \
             -Dgles2=enabled \
             -Dvalgrind=disabled \
             -Db_ndebug=true
@@ -564,13 +564,15 @@ jobs:
           cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
           find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
 
-          # Mode xlib = monolitik, semua kode gallium+zink sudah menyatu
-          # langsung di libGL.so.1 (sama seperti build lama yang terbukti
-          # jalan di ExaGear) -> TIDAK ada zink_dri.so, TIDAK butuh
-          # libglapi.so terpisah, TIDAK butuh folder dri/ atau dynamic
-          # loading DRI sama sekali. Cukup 1 file libGL.so.1 + ICD json +
-          # libvulkan_freedreno.so, identik dengan struktur artefak lama.
+          # Mode xlib = tidak ada dynamic DRI loading (aman dari ExaGear
+          # binary translator), TAPI shared-glapi tetap enabled -> libGL.so.1
+          # tetap butuh libglapi.so.0 terpisah sebagai dependency runtime
+          # (Wine sendiri kadang juga dlopen langsung ke libglapi).
           find "$LIBDIR" -maxdepth 1 -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
+          find "$LIBDIR" -maxdepth 1 -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
+          if ! ls "$OUT/lib/"libglapi* >/dev/null 2>&1; then
+            echo "::warning::libglapi.so TIDAK ketemu di LIBDIR meski shared-glapi=enabled. Cek diagnostik isi LIBDIR di atas."
+          fi
 
           echo "Isi paket:"
           find "$OUT" -type f
