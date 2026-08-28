@@ -518,8 +518,8 @@ jobs:
             --libdir=lib/i386-linux-gnu \
             --buildtype=${BUILDTYPE} \
             -Dplatforms=x11 \
-            -Dglx=dri \
-            -Degl=enabled \
+            -Dglx=xlib \
+            -Degl=disabled \
             -Dgbm=disabled \
             -Dgallium-drivers=zink \
             -Dvulkan-drivers=freedreno \
@@ -527,7 +527,7 @@ jobs:
             -Dvulkan-beta=true \
             -Dvulkan-layers= \
             -Dllvm=disabled \
-            -Dshared-glapi=enabled \
+            -Dshared-glapi=disabled \
             -Dgles2=enabled \
             -Dvalgrind=disabled \
             -Db_ndebug=true
@@ -548,7 +548,7 @@ jobs:
         run: |
           set -e
           OUT="turnip-zink-exagear-${MESA_VERSION}-${BUILD_REV}-i386"
-          mkdir -p "$OUT/lib/dri" "$OUT/share/vulkan/icd.d"
+          mkdir -p "$OUT/lib" "$OUT/share/vulkan/icd.d"
 
           LIBDIR="${{ github.workspace }}/staging/usr/lib/i386-linux-gnu"
 
@@ -564,20 +564,13 @@ jobs:
           cp -v "$LIBDIR"/libvulkan_freedreno.so "$OUT/lib/" 2>/dev/null || true
           find "$LIBDIR" -iname "*freedreno*icd*.json" -exec cp -v {} "$OUT/share/vulkan/icd.d/" \;
 
-          # libGL.so* -> sejajar lib/ (loader)
+          # Mode xlib = monolitik, semua kode gallium+zink sudah menyatu
+          # langsung di libGL.so.1 (sama seperti build lama yang terbukti
+          # jalan di ExaGear) -> TIDAK ada zink_dri.so, TIDAK butuh
+          # libglapi.so terpisah, TIDAK butuh folder dri/ atau dynamic
+          # loading DRI sama sekali. Cukup 1 file libGL.so.1 + ICD json +
+          # libvulkan_freedreno.so, identik dengan struktur artefak lama.
           find "$LIBDIR" -maxdepth 1 -iname "libGL.so*" -exec cp -v {} "$OUT/lib/" \;
-
-          # zink_dri.so WAJIB masuk subfolder dri/ (bukan rata di lib/),
-          # karena LIBGL_DRIVERS_PATH nantinya diarahkan ke folder dri/ ini.
-          find "$LIBDIR" -iname "zink_dri.so" -exec cp -v {} "$OUT/lib/dri/" \;
-
-          # libglapi -> dependency runtime WAJIB utk libGL.so.1 (shared-glapi
-          # enabled). Cari lebih luas (termasuk nested di subfolder) kalau-
-          # kalau tidak ketemu di root LIBDIR.
-          find "$LIBDIR" -iname "libglapi*.so*" -exec cp -v {} "$OUT/lib/" \;
-          if ! ls "$OUT/lib/"libglapi* >/dev/null 2>&1; then
-            echo "::warning::libglapi.so TIDAK ketemu sama sekali di LIBDIR! Ini bisa bikin libGL.so.1 gagal load di ExaGear. Cek diagnostik di atas."
-          fi
 
           echo "Isi paket:"
           find "$OUT" -type f
