@@ -73,6 +73,8 @@ env:
 
 jobs:
   build:
+    permissions:
+      contents: write
     # Host runner tetap amd64 biasa. Container image i386/ubuntu:18.04
     # (varian arsitektur resmi Docker Hub) yang bikin semua proses build
     # jadi native i386, bukan cross-compile.
@@ -574,10 +576,49 @@ jobs:
           tar -czf "${OUT}.tar.gz" "$OUT"
           echo "ARTIFACT_NAME=${OUT}" >> "$GITHUB_ENV"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: turnip-zink-exagear-*.tar.gz
-          if-no-files-found: error
-          retention-days: 30
+      # ---------------------------------------------------------------
+      # 8. Upload hasil build. TIDAK pakai actions/upload-artifact@v4
+      #    karena itu JavaScript action yang butuh Node.js jalan DI DALAM
+      #    container -> Node.js sudah lama berhenti rilis build utk i386
+      #    (32-bit), jadi action itu selalu gagal di container i386 kita.
+      #    Solusi: upload manual ke GitHub Release lewat curl (HTTP polos,
+      #    tidak butuh Node sama sekali). Bonus: link download permanen,
+      #    tidak expire 90 hari seperti artifact biasa.
+      # ---------------------------------------------------------------
+      - name: Upload artifact ke GitHub Release (curl, tidak butuh Node)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          apt-get install -y --allow-downgrades --no-install-recommends jq
+
+          OUT_FILE="${ARTIFACT_NAME}.tar.gz"
+          TAG="build-${{ github.run_number }}"
+          REPO="${{ github.repository }}"
+
+          echo "=== Membuat GitHub Release: $TAG ==="
+          curl -sS -X POST \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/releases" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"Build ${TAG} (${MESA_VERSION}, ${BUILD_REV})\",\"draft\":false,\"prerelease\":true,\"body\":\"Auto build Turnip+Zink untuk ExaGear (Ubuntu 18.04 bionic i386).\\nMesa: ${MESA_VERSION}\\nFreedreno KMD: ${FREEDRENO_KMD}\\nVulkan target: ${VK_TARGET}\"}" \
+            -o release.json
+
+          UPLOAD_URL="$(jq -r '.upload_url' release.json | sed 's/{?name,label}//')"
+          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+            echo "::error::Gagal membuat release, respons API:"
+            cat release.json
+            exit 1
+          fi
+
+          echo "=== Upload $OUT_FILE ke release ==="
+          curl -sS -X POST \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Content-Type: application/gzip" \
+            --data-binary @"${OUT_FILE}" \
+            "${UPLOAD_URL}?name=$(basename "$OUT_FILE")" \
+            -o upload_result.json
+
+          DOWNLOAD_URL="$(jq -r '.browser_download_url' upload_result.json)"
+          echo "=== Selesai! Link download: ==="
+          echo "$DOWNLOAD_URL"
